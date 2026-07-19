@@ -4,7 +4,7 @@
 
 Runs entirely on-device, works with no internet, and needs no hardware beyond a phone.
 
-> **Live demo:** https://AnjaliiD/buzzguard/buzzguard_app.html
+> **Live demo:** https://AnjaliiD.github.io/buzzguard/app/buzzguard_app.html
 > *(Open on a phone. Allow microphone and location. Works offline once loaded.)*
 
 ---
