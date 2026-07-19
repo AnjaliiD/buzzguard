@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BuzzGuard</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#2c6b54">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<style>
+  :root{
+    --paper:#ffffff; --ink:#22302d; --body:#3d4b45; --mute:#8a8576;
+    --rule:#d8cfbc; --pine:#2c6b54; --brick:#b04a2c; --ochre:#cf8a2a;
+    --sage:#6f9e7d; --wash:#f7f5f0;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--paper); color:var(--body);
+    font-size:15px; line-height:1.5;
+    padding:22px 20px 60px; max-width:760px; margin:0 auto;
+    -webkit-font-smoothing:antialiased;
+  }
+  .eyebrow{font-size:11px; letter-spacing:3px; color:var(--brick); font-weight:700}
+  h1{font-size:27px; color:var(--ink); font-weight:700; letter-spacing:-.2px; margin:6px 0 3px}
+  .sub{color:var(--mute); font-size:13.5px}
+  hr{border:0; border-top:1px solid var(--rule); margin:18px 0}
+  .lbl{font-size:11px; letter-spacing:2.5px; color:var(--pine); font-weight:700; margin-bottom:9px}
+
+  /* ---- signature: the machine's-eye view ---- */
+  .scope{position:relative; border:1px solid var(--rule); background:var(--wash); border-radius:3px; overflow:hidden}
+  canvas{display:block; width:100%; height:190px}
+  .band{
+    position:absolute; right:7px; top:6px; font-size:10px; letter-spacing:1.5px;
+    color:var(--mute); background:rgba(255,255,255,.82); padding:1px 5px; border-radius:2px;
+  }
+  .axis{position:absolute; left:6px; font-size:10px; color:var(--mute); background:rgba(255,255,255,.75); padding:0 3px}
+
+  .row{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+  button{
+    font:inherit; font-weight:600; cursor:pointer; border-radius:3px;
+    padding:11px 20px; border:1px solid var(--ink); background:var(--ink); color:#fff;
+  }
+  button.ghost{background:transparent; color:var(--ink)}
+  button:disabled{opacity:.4; cursor:not-allowed}
+  button:focus-visible{outline:2px solid var(--ochre); outline-offset:2px}
+
+  /* ---- level meter: is the mic even alive ---- */
+  .level{flex:1; min-width:120px; height:5px; background:var(--rule); border-radius:3px; overflow:hidden}
+  .level i{display:block; height:100%; width:0%; background:var(--sage); transition:width .08s}
+
+  /* ---- verdict ---- */
+  .verdict{
+    border:1px solid var(--rule); border-left:3px solid var(--rule);
+    padding:13px 15px; border-radius:3px; margin-bottom:14px;
+  }
+  .verdict.hot{border-left-color:var(--brick); background:#fdf4f1}
+  .verdict.warm{border-left-color:var(--ochre); background:#fdf8ef}
+  .verdict.cool{border-left-color:var(--sage)}
+  .verdict b{color:var(--ink); font-size:19px; font-weight:700; display:block}
+  .verdict span{font-size:12.5px; color:var(--mute)}
+
+  /* ---- bars ---- */
+  .bar{display:grid; grid-template-columns:120px 1fr 52px; gap:11px; align-items:center; margin-bottom:8px}
+  .bar .n{font-size:13px; color:var(--body)}
+  .bar .t{height:9px; background:var(--rule); border-radius:2px; overflow:hidden}
+  .bar .t i{display:block; height:100%; width:0%; transition:width .12s}
+  .bar .v{font-size:12px; text-align:right; color:var(--mute); font-variant-numeric:tabular-nums}
+
+  input[type=range]{flex:1; min-width:130px; accent-color:var(--pine)}
+  .hint{font-size:12px; color:var(--mute); margin-top:7px}
+  .hint b{color:var(--body); font-weight:600}
+
+  table{width:100%; border-collapse:collapse; font-size:13px}
+  th{text-align:left; font-size:10px; letter-spacing:1.5px; color:var(--mute); font-weight:700; padding:0 0 6px; border-bottom:1px solid var(--rule)}
+  td{padding:7px 0; border-bottom:1px solid #efe9db; font-variant-numeric:tabular-nums}
+  .empty{color:var(--mute); font-size:13px; padding:14px 0}
+
+  .note{background:var(--wash); border:1px solid var(--rule); border-radius:3px; padding:12px 14px; font-size:12.5px}
+  .err{border-color:var(--brick); background:#fdf4f1; color:var(--brick)}
+  .drop{border:1px dashed var(--rule); border-radius:3px; padding:16px; text-align:center; font-size:13px; color:var(--mute)}
+  .drop input{margin-top:8px; font-size:12px}
+
+  /* ---- phase 2 ---- */
+  #map{height:290px; border:1px solid var(--rule); border-radius:3px; background:var(--wash)}
+  .pill{
+    display:inline-block; font-size:11px; letter-spacing:1px; font-weight:700;
+    padding:3px 9px; border-radius:11px; border:1px solid var(--rule); color:var(--mute);
+  }
+  .pill.on{border-color:var(--pine); color:var(--pine)}
+  .pill.off{border-color:var(--brick); color:var(--brick)}
+  .tiny{font:inherit; font-size:12px; font-weight:600; padding:7px 13px; background:transparent; color:var(--ink); border:1px solid var(--rule)}
+  .tiny:hover{border-color:var(--ink)}
+  .stat{display:flex; gap:26px; margin:12px 0 4px}
+  .stat div{font-size:11px; letter-spacing:1.5px; color:var(--mute)}
+  .stat b{display:block; font-size:22px; color:var(--ink); font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:0}
+
+  /* ---- risk cards ---- */
+  .rcard{border:1px solid var(--rule); border-left:4px solid var(--rule); border-radius:3px; padding:13px 15px; margin-bottom:11px}
+  .rcard.high{border-left-color:var(--brick); background:#fdf4f1}
+  .rcard.med{border-left-color:var(--ochre); background:#fdf8ef}
+  .rcard.low{border-left-color:var(--sage)}
+  .rcard .top{display:flex; justify-content:space-between; align-items:baseline; gap:10px}
+  .rcard .ward{font-size:16px; font-weight:700; color:var(--ink)}
+  .rcard .score{font-size:22px; font-weight:700; font-variant-numeric:tabular-nums}
+  .rcard .score.high{color:var(--brick)} .rcard .score.med{color:var(--ochre)} .rcard .score.low{color:var(--sage)}
+  .rcard .why{font-size:12px; color:var(--mute); margin:5px 0 9px}
+  .rcard .task{font-size:13px; color:var(--body); padding:8px 11px; background:rgba(255,255,255,.6); border:1px solid var(--rule); border-radius:3px}
+  .rcard .task b{color:var(--ink); font-weight:700}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="eyebrow">PHASE 1 &middot; LISTENER</div>
+<h1>BuzzGuard</h1>
+<div class="sub">Point the mic at a buzz. The model names the species on-device.</div>
+<hr>
+
+<!-- 1. model -->
+<div class="lbl">MODEL</div>
+<div id="loadbox" class="drop">
+  Pick <b>model.json</b>, the <b>.bin</b> shard, and <b>model_meta.json</b> from your Phase 0 export
+  <input type="file" id="files" multiple accept=".json,.bin">
+</div>
+<div id="mstat" class="note" style="margin-top:10px">No model loaded.</div>
+
+<hr>
+
+<!-- 1b. bench test -->
+<div class="lbl">BENCH TEST &mdash; SKIP THE MICROPHONE</div>
+<div id="benchbox" class="drop">
+  Drop in a <b>.wav</b> and classify it directly. No speakers, no room, no mic.
+  <input type="file" id="wav" accept="audio/*" disabled>
+</div>
+<div id="bstat" class="hint">Load a model first. Then feed it a clip from your Wingbeats test set.</div>
+<div id="bres"></div>
+
+<hr>
+
+<!-- 2. scope -->
+<div class="lbl">WHAT THE MODEL HEARS</div>
+<div class="scope">
+  <canvas id="spec"></canvas>
+  <div class="band">0&ndash;2000 Hz</div>
+  <div class="axis" id="ax1">1000</div>
+  <div class="axis" id="ax2">300</div>
+</div>
+<div class="hint">Mosquitoes live between the two guide lines. Flat and empty means the mic is not picking anything up.</div>
+
+<div class="row" style="margin-top:14px">
+  <button id="go" disabled>Start listening</button>
+  <div class="level"><i id="lvl"></i></div>
+</div>
+<div id="astat" class="hint">Microphone off.</div>
+
+<hr>
+
+<!-- 3. verdict -->
+<div class="lbl">READING</div>
+<div id="verdict" class="verdict">
+  <b id="vname">&mdash;</b>
+  <span id="vsub">Waiting for audio</span>
+</div>
+<div id="bars"></div>
+
+<div class="row" style="margin-top:16px">
+  <span style="font-size:12.5px">Confidence gate</span>
+  <input type="range" id="thr" min="0" max="0.95" step="0.05" value="0.6">
+  <span id="thrv" style="font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--ink); font-weight:600">0.60</span>
+</div>
+<div class="hint">
+  Your Phase 0 sweep: <b>0.60</b> keeps 74.8% of clips at 83.0% accuracy. Raising it to 0.90 buys 93.7%
+  but throws away 61% of what you hear.
+</div>
+
+<hr>
+
+<!-- 4. where -->
+<div class="lbl">WHERE</div>
+<div class="row" style="margin-bottom:11px">
+  <span id="geopill" class="pill">LOCATION OFF</span>
+  <span id="netpill" class="pill">NET</span>
+  <span id="dbpill" class="pill">STORAGE</span>
+  <button id="geo" class="tiny">Use my location</button>
+</div>
+<div id="map"></div>
+<div class="hint">
+  Every confident detection is stamped with a location and time and written to this device.
+  Nothing is uploaded. Turn off the network and it keeps working.
+</div>
+
+<div class="stat">
+  <div>TOTAL<b id="s1">0</b></div>
+  <div>AEDES<b id="s2">0</b></div>
+  <div>LAST 24H<b id="s3">0</b></div>
+</div>
+
+<hr>
+
+<!-- 5. risk -->
+<div class="lbl">WARD RISK &mdash; DETECTIONS + WATER REPORTS + RAIN</div>
+<div class="row" style="margin-bottom:12px; gap:10px">
+  <button id="report" class="tiny">Report stagnant water here</button>
+  <span class="pill" id="rainpill">RAIN: not set</span>
+  <input type="range" id="rain" min="0" max="100" step="5" value="20" style="max-width:150px">
+</div>
+<div class="hint" style="margin-top:-4px; margin-bottom:12px">
+  Rain slider stands in for a weather feed (mm, last 7 days). Wire it to a real API later; for a demo,
+  set it by hand. Breeding needs standing water, so rain multiplies the risk from reported sites.
+</div>
+<div id="riskcards"></div>
+<div id="risknote" class="hint">
+  No wards scored yet. Log a detection or report a water site, and a ward appears here with a task for a health worker.
+</div>
+
+<hr>
+
+<!-- 6. log -->
+<div class="lbl">DETECTION LOG</div>
+<table>
+  <thead><tr><th>TIME</th><th>SPECIES</th><th>LOCATION</th><th style="text-align:right">CONF</th></tr></thead>
+  <tbody id="log"></tbody>
+</table>
+<div id="logempty" class="empty">Nothing logged yet. Confident detections are saved here and survive a reload.</div>
+<div class="row" style="margin-top:13px">
+  <button id="csv" class="tiny">Export CSV</button>
+  <button id="json" class="tiny">Export JSON</button>
+  <button id="wipe" class="tiny">Clear all</button>
+</div>
+
+<script>
+const CLIP = 5000, SR = 8000, HOP_MS = 250, SMOOTH = 8;
+let CLASSES = ["aedes","other_mosquito","background"];
+const PRETTY = {aedes:"Aedes", other_mosquito:"Other mosquito", background:"No mosquito"};
+const COLOR  = {aedes:"var(--brick)", other_mosquito:"var(--ochre)", background:"var(--sage)"};
+
+let model=null, ctx=null, node=null, stream=null, analyser=null;
+let ring=new Float32Array(CLIP), rpos=0, hist=[], timer=null, raf=null;
+let lastLog={}, running=false, srcRate=SR, silentFor=0;
+
+const $ = id => document.getElementById(id);
+
+/* ---------------- model ---------------- */
+$("files").addEventListener("change", async e => {
+  const fs = Array.from(e.target.files);
+  const json = fs.find(f => f.name === "model.json");
+  const bins = fs.filter(f => f.name.endsWith(".bin"));
+  const meta = fs.find(f => f.name === "model_meta.json");
+
+  if(!json || !bins.length){
+    say($("mstat"), "Need model.json and at least one .bin shard. Pick them from the tfjs folder.", true);
+    return;
+  }
+  if(meta){
+    try{
+      const m = JSON.parse(await meta.text());
+      if(Array.isArray(m.classes)) CLASSES = m.classes;
+    }catch(_){}
+  }
+  say($("mstat"), "Loading model...");
+  try{
+    model = await tf.loadGraphModel(tf.io.browserFiles([json, ...bins]));
+    // warm up: first call compiles shaders and is slow
+    tf.tidy(()=> model.predict(tf.zeros([1, CLIP])));
+    const kb = (bins.reduce((a,b)=>a+b.size,0)/1024).toFixed(0);
+    say($("mstat"), `Ready. ${CLASSES.length} classes, ${kb} KB of weights.`);
+    $("go").disabled = false;
+    $("wav").disabled = false;
+    $("bstat").innerHTML = "Feed it a clip from your Wingbeats test set. If it gets that right, the model is fine and any live miss is the room, not the maths.";
+    drawBars(new Float32Array(CLASSES.length));
+
+    // keep it on the device so the next visit needs no files and no network
+    try{
+      await model.save("indexeddb://buzzguard-model");
+      localStorage.setItem("bg_classes", JSON.stringify(CLASSES));
+      say($("mstat"), `Ready. ${CLASSES.length} classes, ${kb} KB. Saved to this device, so it will load itself next time.`);
+    }catch(err){
+      say($("mstat"), `Ready. ${CLASSES.length} classes, ${kb} KB. (Could not cache it here, so you will need to pick the files again next visit.)`);
+    }
+  }catch(err){
+    say($("mstat"), "Could not load: " + err.message, true);
+  }
+});
+
+function say(el, msg, bad){ el.textContent = msg; el.className = "note" + (bad ? " err" : ""); }
+
+/* ---------------- bench test: file in, verdict out ---------------- */
+$("wav").addEventListener("change", async e => {
+  const f = e.target.files[0];
+  if(!f || !model) return;
+  $("bstat").textContent = "Decoding " + f.name + " ...";
+  $("bres").innerHTML = "";
+  try{
+    const ab = await f.arrayBuffer();
+    const tmp = new (window.AudioContext||window.webkitAudioContext)();
+    const dec = await tmp.decodeAudioData(ab);
+    tmp.close();
+
+    // resample to exactly 8 kHz, properly, offline
+    const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(dec.duration*SR)), SR);
+    const s = off.createBufferSource();
+    s.buffer = dec; s.connect(off.destination); s.start();
+    let y = (await off.startRendering()).getChannelData(0);
+
+    // Wingbeats clips are exactly one window long, so resampling rounding can
+    // leave us a sample or two short. Pad rather than refuse.
+    if(y.length < CLIP){
+      if(y.length < CLIP*0.5){
+        $("bstat").textContent = `Clip is ${(y.length/SR).toFixed(2)} s, too short. Needs about ${(CLIP/SR).toFixed(2)} s.`;
+        return;
+      }
+      const p = new Float32Array(CLIP); p.set(y); y = p;
+    }
+
+    // slide a window across the whole clip
+    const hop = Math.floor(CLIP/2), sums = new Float64Array(CLASSES.length);
+    const wins = [], votes = new Int32Array(CLASSES.length);
+    for(let o=0; o+CLIP<=y.length; o+=hop){
+      const w = y.subarray(o, o+CLIP);
+      const p = tf.tidy(()=>{
+        const x = tf.tensor2d([Array.from(w)], [1, CLIP]);
+        let out; try{ out = model.predict(x); }
+        catch(_){ out = model.execute({[model.inputs[0].name]: x}); }
+        return (Array.isArray(out)?out[0]:out).dataSync();
+      });
+      wins.push(p);
+      let k=0; for(let i=1;i<p.length;i++) if(p[i]>p[k]) k=i;
+      votes[k]++;
+      for(let i=0;i<sums.length;i++) sums[i]+=p[i];
+    }
+    const avg = Array.from(sums, v => v/wins.length);
+    let best=0; for(let i=1;i<avg.length;i++) if(avg[i]>avg[best]) best=i;
+
+    $("bstat").textContent =
+      `${f.name} · ${(y.length/SR).toFixed(2)} s · ${wins.length} windows analysed`;
+    $("bres").innerHTML =
+      `<div class="verdict ${CLASSES[best]==="aedes"?"hot":CLASSES[best]==="background"?"cool":"warm"}"
+            style="margin-top:12px">
+         <b>${PRETTY[CLASSES[best]]||CLASSES[best]}</b>
+         <span>${(avg[best]*100).toFixed(1)}% mean confidence across the clip</span>
+       </div>
+       <table style="margin-top:10px">
+         <thead><tr><th>CLASS</th><th style="text-align:right">MEAN</th><th style="text-align:right">WINDOWS WON</th></tr></thead>
+         <tbody>${CLASSES.map((c,i)=>
+           `<tr><td>${PRETTY[c]||c}</td>
+                <td style="text-align:right">${(avg[i]*100).toFixed(1)}%</td>
+                <td style="text-align:right">${votes[i]} / ${wins.length}</td></tr>`).join("")}
+         </tbody>
+       </table>
+       <div class="hint">No gate applied here. These are the raw numbers the model produces.</div>`;
+  }catch(err){
+    $("bstat").textContent = "Could not read that file: " + err.message;
+  }
+});
+
+/* ---------------- audio ---------------- */
+$("go").onclick = () => running ? stop() : start();
+
+async function start(){
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio:{
+      channelCount:1, echoCancellation:false, noiseSuppression:false, autoGainControl:false
+    }});
+  }catch(err){
+    $("astat").innerHTML = "Microphone blocked. Allow access, and note the page must be on https or localhost.";
+    return;
+  }
+  // ask for 8 kHz so the browser resamples for us
+  try{ ctx = new (window.AudioContext||window.webkitAudioContext)({sampleRate:SR}); }
+  catch(_){ ctx = new (window.AudioContext||window.webkitAudioContext)(); }
+  await ctx.resume();
+  srcRate = ctx.sampleRate;
+
+  const src = ctx.createMediaStreamSource(stream);
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.55;
+  src.connect(analyser);
+
+  const code = `class C extends AudioWorkletProcessor{
+    process(i){ const c=i[0][0]; if(c) this.port.postMessage(c.slice(0)); return true; }
+  } registerProcessor('cap', C);`;
+  const url = URL.createObjectURL(new Blob([code],{type:"application/javascript"}));
+  await ctx.audioWorklet.addModule(url);
+  node = new AudioWorkletNode(ctx, "cap");
+  node.port.onmessage = e => push(e.data);
+  src.connect(node);
+
+  running = true;
+  $("go").textContent = "Stop listening";
+  $("go").classList.add("ghost");
+  $("astat").innerHTML = srcRate === SR
+    ? `Listening at ${SR} Hz.`
+    : `Listening at ${srcRate} Hz, resampling to ${SR} Hz in the browser.`;
+
+  timer = setInterval(infer, HOP_MS);
+  raf = requestAnimationFrame(paint);
+}
+
+function stop(){
+  running = false;
+  clearInterval(timer); cancelAnimationFrame(raf);
+  if(node) node.disconnect();
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  if(ctx) ctx.close();
+  $("go").textContent = "Start listening";
+  $("go").classList.remove("ghost");
+  $("astat").textContent = "Microphone off.";
+  $("lvl").style.width = "0%";
+  hist = [];
+}
+
+/* linear resample, only used if the browser refused an 8 kHz context */
+function toSR(buf){
+  if(srcRate === SR) return buf;
+  const r = srcRate / SR, n = Math.floor(buf.length / r), out = new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const p = i*r, i0 = Math.floor(p), f = p - i0;
+    out[i] = buf[i0]*(1-f) + (buf[i0+1] !== undefined ? buf[i0+1] : buf[i0])*f;
+  }
+  return out;
+}
+
+function push(chunk){
+  const b = toSR(chunk);
+  for(let i=0;i<b.length;i++){ ring[rpos] = b[i]; rpos = (rpos+1) % CLIP; }
+}
+
+function window_(){
+  const out = new Float32Array(CLIP);
+  for(let i=0;i<CLIP;i++) out[i] = ring[(rpos+i) % CLIP];
+  return out;
+}
+
+/* ---------------- inference ---------------- */
+async function infer(){
+  if(!model || !running) return;
+  const win = window_();
+
+  let rms = 0; for(let i=0;i<CLIP;i++) rms += win[i]*win[i];
+  rms = Math.sqrt(rms/CLIP);
+  $("lvl").style.width = Math.min(100, rms*420) + "%";
+
+  if(rms < 0.0015){
+    silentFor += HOP_MS;
+    if(silentFor > 2500) $("astat").textContent = "Almost no signal. Check the mic input and move closer.";
+  } else { silentFor = 0; }
+
+  const probs = tf.tidy(()=>{
+    const x = tf.tensor2d([win], [1, CLIP]);
+    let y;
+    try { y = model.predict(x); }
+    catch(_){ y = model.execute({[model.inputs[0].name]: x}); }
+    return (Array.isArray(y) ? y[0] : y).dataSync();
+  });
+
+  // average over ~2 s: single 0.6 s clips are jumpy, and a steadier
+  // reading clears the gate more reliably than any one frame
+  hist.push(Float32Array.from(probs));
+  if(hist.length > SMOOTH) hist.shift();
+  const avg = new Float32Array(CLASSES.length);
+  for(const h of hist) for(let i=0;i<avg.length;i++) avg[i] += h[i]/hist.length;
+
+  drawBars(avg);
+  verdict(avg);
+}
+
+function drawBars(p){
+  const box = $("bars");
+  if(box.children.length !== CLASSES.length){
+    box.innerHTML = CLASSES.map(c =>
+      `<div class="bar"><div class="n">${PRETTY[c]||c}</div>
+       <div class="t"><i data-c="${c}" style="background:${COLOR[c]||"var(--pine)"}"></i></div>
+       <div class="v" data-v="${c}">0%</div></div>`).join("");
+  }
+  CLASSES.forEach((c,i)=>{
+    box.querySelector(`[data-c="${c}"]`).style.width = (p[i]*100).toFixed(0)+"%";
+    box.querySelector(`[data-v="${c}"]`).textContent = (p[i]*100).toFixed(0)+"%";
+  });
+}
+
+function verdict(p){
+  let k=0; for(let i=1;i<p.length;i++) if(p[i]>p[k]) k=i;
+  const cls = CLASSES[k], conf = p[k], thr = parseFloat($("thr").value);
+  const v = $("verdict");
+
+  if(conf < thr){
+    v.className = "verdict";
+    $("vname").textContent = "Not sure";
+    $("vsub").textContent = `Best guess ${PRETTY[cls]||cls} at ${(conf*100).toFixed(0)}%, below the ${thr.toFixed(2)} gate`;
+    return;
+  }
+  v.className = "verdict " + (cls==="aedes" ? "hot" : cls==="background" ? "cool" : "warm");
+  $("vname").textContent = PRETTY[cls]||cls;
+  $("vsub").textContent = cls==="aedes"
+    ? `${(conf*100).toFixed(0)}% confident. Dengue vector.`
+    : `${(conf*100).toFixed(0)}% confident`;
+
+  if(cls !== "background"){
+    const now = Date.now();
+    if(!lastLog[cls] || now - lastLog[cls] > 3000){ lastLog[cls] = now; log(cls, conf); }
+  }
+}
+
+/* ---------------- storage: IndexedDB, no server, no library ---------------- */
+const DB="buzzguard", STORE="detections", WSTORE="water";
+function open_(){
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open(DB, 2);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      if(!d.objectStoreNames.contains(STORE))
+        d.createObjectStore(STORE, {keyPath:"id", autoIncrement:true});
+      if(!d.objectStoreNames.contains(WSTORE))
+        d.createObjectStore(WSTORE, {keyPath:"id", autoIncrement:true});
+    };
+    r.onsuccess = ()=>res(r.result);
+    r.onerror   = ()=>rej(r.error);
+  });
+}
+async function save(rec, store=STORE){
+  const d = await open_();
+  return new Promise((res,rej)=>{
+    const t = d.transaction(store,"readwrite");
+    t.objectStore(store).add(rec);
+    t.oncomplete = ()=>res(); t.onerror = ()=>rej(t.error);
+  });
+}
+async function readAll(store=STORE){
+  const d = await open_();
+  return new Promise((res,rej)=>{
+    const q = d.transaction(store,"readonly").objectStore(store).getAll();
+    q.onsuccess = ()=>res(q.result || []); q.onerror = ()=>rej(q.error);
+  });
+}
+async function wipe(){
+  const d = await open_();
+  return new Promise((res,rej)=>{
+    const t = d.transaction([STORE,WSTORE],"readwrite");
+    t.objectStore(STORE).clear(); t.objectStore(WSTORE).clear();
+    t.oncomplete = ()=>res(); t.onerror = ()=>rej(t.error);
+  });
+}
+
+/* ---------------- location ---------------- */
+let here = null, watch = null;
+$("geo").onclick = () => {
+  if(!navigator.geolocation){
+    $("geopill").textContent = "NO GEO"; $("geopill").className = "pill off"; return;
+  }
+  if(watch !== null){
+    navigator.geolocation.clearWatch(watch); watch = null; here = null;
+    $("geopill").textContent = "LOCATION OFF"; $("geopill").className = "pill";
+    $("geo").textContent = "Use my location"; return;
+  }
+  $("geopill").textContent = "LOCATING";
+  watch = navigator.geolocation.watchPosition(
+    p => {
+      here = {lat:p.coords.latitude, lng:p.coords.longitude, acc:Math.round(p.coords.accuracy)};
+      $("geopill").textContent = `LOCATION ±${here.acc}m`;
+      $("geopill").className = "pill on";
+      $("geo").textContent = "Stop using location";
+      if(map && !mapMoved){ map.setView([here.lat, here.lng], 16); mapMoved = true; }
+      if(youDot) youDot.setLatLng([here.lat, here.lng]);
+      else if(map) youDot = L.circleMarker([here.lat,here.lng],
+        {radius:5, color:"#2c6b54", weight:2, fillColor:"#fff", fillOpacity:1}).addTo(map).bindPopup("You");
+    },
+    err => { $("geopill").textContent = "LOCATION BLOCKED"; $("geopill").className = "pill off"; },
+    {enableHighAccuracy:true, maximumAge:10000, timeout:15000}
+  );
+};
+
+/* ---------------- map ---------------- */
+let map=null, youDot=null, mapMoved=false, layer=null;
+function initMap(){
+  map = L.map("map", {attributionControl:true}).setView([12.9716, 77.5946], 12); // Bengaluru until we know better
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {maxZoom:19, attribution:"&copy; OpenStreetMap"}).addTo(map);
+  layer = L.layerGroup().addTo(map);
+}
+function mark(r){
+  if(!map || r.lat == null) return;
+  const c = r.species === "aedes" ? "#b04a2c" : "#cf8a2a";
+  L.circleMarker([r.lat, r.lng], {
+    radius: 6 + (r.conf*5), color:c, weight:1.5, fillColor:c, fillOpacity:.35
+  }).addTo(layer).bindPopup(
+    `<b>${PRETTY[r.species]||r.species}</b><br>${(r.conf*100).toFixed(0)}% confident<br>
+     ${new Date(r.ts).toLocaleString()}<br>±${r.acc||"?"}m`
+  );
+}
+
+/* ---------------- risk layer: the part Abuzz and HumBug do not have ----------------
+   A ward-level score fusing three signals a health worker can act on:
+     - recent Aedes detections (the acoustic evidence)
+     - reported stagnant-water sites (where breeding happens)
+     - recent rainfall (whether that water is actually standing)
+   Wards here are ~700 m grid cells derived from lat/lng, so no map data is needed.
+   Swap in real ward polygons later without touching the scoring.                    */
+
+let rainMm = 20;
+$("rain").oninput = e => {
+  rainMm = +e.target.value;
+  $("rainpill").textContent = `RAIN: ${rainMm} mm / 7d`;
+  $("rainpill").className = "pill " + (rainMm >= 40 ? "off" : rainMm >= 15 ? "" : "on");
+  renderRisk();
+};
+
+$("report").onclick = async () => {
+  if(!here){
+    $("risknote").textContent = "Turn on location first, so the water report can be placed on a ward.";
+    return;
+  }
+  await save({ts:Date.now(), lat:here.lat, lng:here.lng, acc:here.acc}, WSTORE);
+  if(map){
+    L.marker([here.lat, here.lng]).addTo(layer)
+      .bindPopup("Reported stagnant water<br>"+new Date().toLocaleString());
+  }
+  await renderRisk();
+};
+
+// ~700 m grid cell id from coordinates (0.006 deg lat)
+const CELL = 0.006;
+const wardId = (lat,lng) => `${Math.floor(lat/CELL)}_${Math.floor(lng/CELL)}`;
+const wardName = key => "Ward " + (Math.abs(hashStr(key)) % 89 + 1);  // stable readable label
+function hashStr(s){ let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))|0; return h; }
+
+function scoreWard(aedes7d, waterSites, rain){
+  // each term 0..1, weighted; rain gates how much standing water matters
+  const det   = Math.min(1, aedes7d / 5);              // 5+ recent Aedes = maxed
+  const rainF = Math.min(1, rain / 50);                // 50 mm = fully wet
+  const water = Math.min(1, waterSites / 3) * (0.3 + 0.7*rainF);
+  const raw = 0.55*det + 0.45*water;
+  return Math.round(raw * 100);
+}
+
+async function renderRisk(){
+  const now = Date.now(), day7 = now - 7*864e5;
+  const dets  = (await readAll(STORE)).filter(r => r.lat != null);
+  const water = (await readAll(WSTORE));
+
+  const wards = {};
+  const bucket = (key) => wards[key] ||= {aedes7:0, water:0, lat:0, lng:0, n:0};
+  for(const r of dets){
+    const k = wardId(r.lat, r.lng); const w = bucket(k);
+    w.lat += r.lat; w.lng += r.lng; w.n++;
+    if(r.species === "aedes" && r.ts > day7) w.aedes7++;
+  }
+  for(const s of water){
+    const k = wardId(s.lat, s.lng); const w = bucket(k);
+    w.lat += s.lat; w.lng += s.lng; w.n++; w.water++;
+  }
+
+  const rows = Object.entries(wards).map(([k,w])=>({
+    key:k, name:wardName(k), aedes7:w.aedes7, water:w.water,
+    score: scoreWard(w.aedes7, w.water, rainMm)
+  })).sort((a,b)=>b.score - a.score);
+
+  $("risknote").style.display = rows.length ? "none" : "block";
+  $("riskcards").innerHTML = rows.map(r=>{
+    const band = r.score >= 60 ? "high" : r.score >= 30 ? "med" : "low";
+    const task = r.score >= 60
+      ? `<b>Act now.</b> ${r.aedes7} Aedes detection${r.aedes7!==1?"s":""} and ${r.water} water site${r.water!==1?"s":""} this week. Send a team for source reduction and larviciding.`
+      : r.score >= 30
+        ? `<b>Watch.</b> Inspect the ${r.water} reported water site${r.water!==1?"s":""} within 48 hours; recheck after next rain.`
+        : `<b>Routine.</b> No urgent action. Keep passive monitoring on.`;
+    return `<div class="rcard ${band}">
+      <div class="top"><span class="ward">${r.name}</span>
+        <span class="score ${band}">${r.score}<span style="font-size:12px; color:var(--mute)">/100</span></span></div>
+      <div class="why">${r.aedes7} Aedes in 7 days &middot; ${r.water} water report${r.water!==1?"s":""} &middot; rain ${rainMm} mm</div>
+      <div class="task">${task}</div>
+    </div>`;
+  }).join("");
+}
+
+/* ---------------- log ---------------- */
+async function refresh(){
+  const rows = (await readAll()).sort((a,b)=>b.ts-a.ts);
+  $("logempty").style.display = rows.length ? "none" : "block";
+  $("log").innerHTML = rows.slice(0,200).map(r=>{
+    const loc = r.lat != null ? `${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}` : "not recorded";
+    return `<tr><td>${new Date(r.ts).toLocaleTimeString()}</td>
+      <td style="color:${r.species==="aedes"?"var(--brick)":"var(--ochre)"}">${PRETTY[r.species]||r.species}</td>
+      <td style="color:var(--mute); font-size:12px">${loc}</td>
+      <td style="text-align:right">${(r.conf*100).toFixed(0)}%</td></tr>`;
+  }).join("");
+
+  const day = Date.now() - 864e5;
+  $("s1").textContent = rows.length;
+  $("s2").textContent = rows.filter(r=>r.species==="aedes").length;
+  $("s3").textContent = rows.filter(r=>r.ts > day).length;
+
+  if(layer){ layer.clearLayers(); rows.forEach(mark); }
+}
+
+async function log(cls, conf){
+  const rec = {ts:Date.now(), species:cls, conf:+conf.toFixed(4),
+               lat: here?here.lat:null, lng: here?here.lng:null, acc: here?here.acc:null};
+  try{ await save(rec); await refresh(); await renderRisk(); }
+  catch(err){ $("dbpill").textContent="STORAGE FAILED"; $("dbpill").className="pill off"; }
+}
+
+/* ---------------- export ---------------- */
+function download(name, text, type){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text],{type}));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+$("csv").onclick = async () => {
+  const rows = await readAll();
+  if(!rows.length) return;
+  const head = "timestamp_iso,species,confidence,lat,lng,accuracy_m";
+  const body = rows.map(r=>[new Date(r.ts).toISOString(), r.species, r.conf,
+    r.lat ?? "", r.lng ?? "", r.acc ?? ""].join(",")).join("\n");
+  download("buzzguard_detections.csv", head+"\n"+body, "text/csv");
+};
+$("json").onclick = async () => {
+  download("buzzguard_detections.json",
+    JSON.stringify(await readAll(), null, 2), "application/json");
+};
+$("wipe").onclick = async () => {
+  if(!confirm("Delete every detection stored on this device?")) return;
+  await wipe(); await refresh(); await renderRisk();
+};
+
+/* ---------------- status + boot ---------------- */
+function net(){
+  const on = navigator.onLine;
+  $("netpill").textContent = on ? "ONLINE" : "OFFLINE, STILL LOGGING";
+  $("netpill").className = "pill " + (on ? "on" : "");
+}
+addEventListener("online", net); addEventListener("offline", net);
+
+(async function boot(){
+  net();
+  $("rainpill").textContent = `RAIN: ${rainMm} mm / 7d`;
+  $("rainpill").className = "pill " + (rainMm >= 40 ? "off" : rainMm >= 15 ? "" : "on");
+  try{ initMap(); }catch(_){ }
+  try{ await refresh(); await renderRisk(); $("dbpill").textContent="STORAGE READY"; $("dbpill").className="pill on"; }
+  catch(_){ $("dbpill").textContent="STORAGE FAILED"; $("dbpill").className="pill off"; }
+
+  // model saved from a previous visit? then this works with no files and no network
+  try{
+    const saved = localStorage.getItem("bg_classes");
+    if(saved) CLASSES = JSON.parse(saved);
+    const m = await tf.loadGraphModel("indexeddb://buzzguard-model");
+    model = m; tf.tidy(()=> model.predict(tf.zeros([1, CLIP])));
+    say($("mstat"), "Model restored from this device. No files needed.");
+    $("go").disabled = false; $("wav").disabled = false;
+    drawBars(new Float32Array(CLASSES.length));
+  }catch(_){ }
+
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+  }
+})();
+
+/* ---------------- spectrogram ---------------- */
+const cv = $("spec"), c2 = cv.getContext("2d");
+let SHOWN = 128;   // 0..2000 Hz of the 256 bins that cover 0..4000 Hz
+
+function fit(){
+  const r = window.devicePixelRatio||1;
+  cv.width = cv.clientWidth*r; cv.height = cv.clientHeight*r;
+  c2.setTransform(r,0,0,r,0,0);
+  c2.fillStyle = "#f7f5f0"; c2.fillRect(0,0,cv.clientWidth,cv.clientHeight);
+  const h = cv.clientHeight;
+  $("ax1").style.top = (h - (1000/2000)*h - 7) + "px";
+  $("ax2").style.top = (h - (300/2000)*h - 7) + "px";
+}
+addEventListener("resize", fit); fit();
+
+function shade(v){
+  // quiet paper -> sage -> pine -> brick at the peaks
+  if(v < .28) return `rgba(120,150,130,${v*1.5})`;
+  if(v < .62) return `rgb(${111-(v-.28)*90|0},${158-(v-.28)*60|0},${125-(v-.28)*40|0})`;
+  return `rgb(${44+(v-.62)*300|0},${107-(v-.62)*90|0},${84-(v-.62)*90|0})`;
+}
+
+function paint(){
+  if(!running){ return; }
+  const w = cv.clientWidth, h = cv.clientHeight;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+
+  // scroll left, newest column on the right
+  c2.drawImage(cv, -1*(window.devicePixelRatio||1), 0);
+  c2.fillStyle = "#f7f5f0"; c2.fillRect(w-2, 0, 2, h);
+
+  const n = Math.min(SHOWN, data.length);
+  for(let i=0;i<n;i++){
+    const v = data[i]/255;
+    if(v > .04){
+      c2.fillStyle = shade(v);
+      const y = h - (i/n)*h;
+      c2.fillRect(w-2, y-(h/n)-.5, 2, (h/n)+1);
+    }
+  }
+  // guide lines at the mosquito band
+  c2.strokeStyle = "rgba(138,133,118,.5)"; c2.lineWidth = 1; c2.setLineDash([3,3]);
+  [300,1000].forEach(f=>{
+    const y = h - (f/2000)*h;
+    c2.beginPath(); c2.moveTo(w-2,y); c2.lineTo(w,y); c2.stroke();
+  });
+  c2.setLineDash([]);
+  raf = requestAnimationFrame(paint);
+}
+
+$("thr").oninput = e => { $("thrv").textContent = parseFloat(e.target.value).toFixed(2); };
+</script>
+</body>
+</html>

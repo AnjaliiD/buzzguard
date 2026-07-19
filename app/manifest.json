@@ -1,0 +1,19 @@
+{
+  "name": "BuzzGuard",
+  "short_name": "BuzzGuard",
+  "description": "Detects disease-carrying mosquitoes by their wingbeat and maps where they are active.",
+  "start_url": "./buzzguard_app.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#2c6b54",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj48cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgZmlsbD0iI2ZmZmZmZiIvPjxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzJjNmI1NCIgc3Ryb2tlLXdpZHRoPSI3IiBzdHJva2UtbGluZWNhcD0icm91bmQiPjxwYXRoIGQ9Ik01OCA3MiBBMzIgMzIgMCAwIDAgNTggMTIwIi8+PHBhdGggZD0iTTQ0IDU4IEE0OCA0OCAwIDAgMCA0NCAxMzQiIG9wYWNpdHk9Ii41Ii8+PC9nPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDExNiw5NikiPjxlbGxpcHNlIGN4PSItMTYiIGN5PSItMjQiIHJ4PSI4IiByeT0iMjQiIHRyYW5zZm9ybT0icm90YXRlKC0zMCAtMTYgLTI0KSIgZmlsbD0iIzZmOWU3ZCIvPjxlbGxpcHNlIGN4PSIxNiIgY3k9Ii0yNCIgcng9IjgiIHJ5PSIyNCIgdHJhbnNmb3JtPSJyb3RhdGUoMzAgMTYgLTI0KSIgZmlsbD0iIzZmOWU3ZCIvPjxwYXRoIGQ9Ik0tNyAtMTQgQy04IDE0IC00IDQwIDAgNDggQzQgNDAgOCAxNCA3IC0xNCBaIiBmaWxsPSIjY2Y4YTJhIi8+PGVsbGlwc2UgY3g9IjAiIGN5PSItMjIiIHJ4PSIxMCIgcnk9IjEyIiBmaWxsPSIjY2Y4YTJhIi8+PGNpcmNsZSBjeD0iMCIgY3k9Ii0zNyIgcj0iNiIgZmlsbD0iI2NmOGEyYSIvPjwvZz48L3N2Zz4=",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
