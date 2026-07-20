@@ -5,231 +5,332 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BuzzGuard</title>
 <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#2c6b54">
+<meta name="theme-color" content="#1f2e26">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,black&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
 <style>
   :root{
-    --paper:#ffffff; --ink:#22302d; --body:#3d4b45; --mute:#8a8576;
-    --rule:#d8cfbc; --pine:#2c6b54; --brick:#b04a2c; --ochre:#cf8a2a;
-    --sage:#6f9e7d; --wash:#f7f5f0;
+    --paper:#f4efe4; --panel:#fbf8f0; --ink:#1f2e26; --body:#3a463d; --mute:#8a8471;
+    --line:#cfc4a8; --line2:#e2d9c2; --pine:#215c43; --brick:#b23a1e; --ochre:#c67f18;
+    --sage:#4f8f5f; --shadow:0 1px 0 #d8cdb0, 0 2px 14px rgba(60,50,20,.06);
   }
   *{box-sizing:border-box; margin:0; padding:0}
+  html{-webkit-text-size-adjust:100%}
   body{
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    background:var(--paper); color:var(--body);
-    font-size:15px; line-height:1.5;
-    padding:22px 20px 60px; max-width:760px; margin:0 auto;
-    -webkit-font-smoothing:antialiased;
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,sans-serif;
+    color:var(--body); font-size:15px; line-height:1.55;
+    padding:0 0 80px; max-width:100%; overflow-x:hidden;
+    /* faint paper grain + a warm vignette so it doesn't read as flat #fff */
+    background:
+      radial-gradient(120% 80% at 100% 0%, #efe7d3 0%, transparent 55%),
+      radial-gradient(100% 70% at 0% 100%, #efe7d3 0%, transparent 50%),
+      var(--paper);
+    background-attachment:fixed;
   }
-  .eyebrow{font-size:11px; letter-spacing:3px; color:var(--brick); font-weight:700}
-  h1{font-size:27px; color:var(--ink); font-weight:700; letter-spacing:-.2px; margin:6px 0 3px}
-  .sub{color:var(--mute); font-size:13.5px}
-  hr{border:0; border-top:1px solid var(--rule); margin:18px 0}
-  .lbl{font-size:11px; letter-spacing:2.5px; color:var(--pine); font-weight:700; margin-bottom:9px}
+  .wrap{max-width:720px; margin:0 auto; padding:0 22px}
+  ::selection{background:#e8dcc0; color:var(--ink)}
 
-  /* ---- signature: the machine's-eye view ---- */
-  .scope{position:relative; border:1px solid var(--rule); background:var(--wash); border-radius:3px; overflow:hidden}
-  canvas{display:block; width:100%; height:190px}
-  .band{
-    position:absolute; right:7px; top:6px; font-size:10px; letter-spacing:1.5px;
-    color:var(--mute); background:rgba(255,255,255,.82); padding:1px 5px; border-radius:2px;
+  /* ---- masthead: asymmetric, like a field journal cover ---- */
+  header{
+    border-bottom:2px solid var(--ink); margin-bottom:6px;
+    padding:26px 0 16px; position:relative;
   }
-  .axis{position:absolute; left:6px; font-size:10px; color:var(--mute); background:rgba(255,255,255,.75); padding:0 3px}
+  .kicker{
+    font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:1.5px;
+    text-transform:uppercase; color:var(--brick); font-weight:600;
+    display:flex; align-items:center; gap:8px;
+  }
+  .kicker::before{content:""; width:22px; height:2px; background:var(--brick); display:inline-block}
+  h1{
+    font-family:"Fraunces",Georgia,serif; font-weight:900; font-size:46px;
+    color:var(--ink); letter-spacing:-1.2px; line-height:.95; margin:9px 0 0;
+    font-optical-sizing:auto;
+  }
+  h1 .g{font-style:italic; font-weight:600; color:var(--pine)}
+  .tagline{
+    font-family:"Fraunces",serif; font-size:16px; font-style:italic; color:var(--mute);
+    margin-top:8px; max-width:30ch;
+  }
+  .stamp{
+    position:absolute; top:24px; right:0; text-align:right;
+    font-family:"IBM Plex Mono",monospace; font-size:10.5px; line-height:1.7;
+    color:var(--mute); letter-spacing:.3px;
+  }
+  .stamp b{color:var(--pine); font-weight:600}
+
+  /* ---- section headers: numbered like a lab log, not ALL-CAPS labels ---- */
+  section{padding:26px 0; border-bottom:1px solid var(--line2)}
+  section:last-of-type{border-bottom:0}
+  .sh{display:flex; align-items:baseline; gap:11px; margin-bottom:15px}
+  .sh .no{
+    font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600;
+    color:var(--paper); background:var(--pine); border-radius:50%;
+    width:23px; height:23px; display:grid; place-items:center; flex:none;
+    transform:rotate(-4deg);
+  }
+  .sh h2{
+    font-family:"Fraunces",serif; font-weight:600; font-size:21px; color:var(--ink);
+    letter-spacing:-.3px; line-height:1.1;
+  }
+  .sh .aside{
+    margin-left:auto; font-family:"IBM Plex Mono",monospace; font-size:10.5px;
+    color:var(--mute); letter-spacing:.5px; text-align:right; align-self:center;
+  }
+
+  /* ---- panels: soft double-edge, slight warmth, never flat ---- */
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:9px; box-shadow:var(--shadow)}
+  .pad{padding:15px 16px}
+
+  .scope{position:relative; border:1px solid var(--line); border-radius:9px; background:#1f2e26; overflow:hidden; box-shadow:var(--shadow)}
+  canvas{display:block; width:100%; height:200px}
+  .band{
+    position:absolute; right:9px; top:8px; font-family:"IBM Plex Mono",monospace;
+    font-size:10px; letter-spacing:1px; color:#cdbfa0; background:rgba(31,46,38,.7);
+    padding:2px 6px; border-radius:4px;
+  }
+  .axis{position:absolute; left:8px; font-family:"IBM Plex Mono",monospace; font-size:10px; color:#b7cbb9; background:rgba(31,46,38,.55); padding:0 4px; border-radius:3px}
 
   .row{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+
+  /* ---- buttons: chunky, tactile, with a printed-ink press ---- */
   button{
-    font:inherit; font-weight:600; cursor:pointer; border-radius:3px;
-    padding:11px 20px; border:1px solid var(--ink); background:var(--ink); color:#fff;
+    font-family:"Inter",sans-serif; font-weight:600; font-size:14px; cursor:pointer;
+    border-radius:8px; padding:12px 20px; border:1.5px solid var(--ink);
+    background:var(--ink); color:var(--paper); letter-spacing:.2px;
+    box-shadow:2px 2px 0 rgba(31,46,38,.9); transition:transform .06s, box-shadow .06s;
   }
-  button.ghost{background:transparent; color:var(--ink)}
-  button:disabled{opacity:.4; cursor:not-allowed}
-  button:focus-visible{outline:2px solid var(--ochre); outline-offset:2px}
+  button:active{transform:translate(2px,2px); box-shadow:0 0 0 rgba(0,0,0,0)}
+  button.ghost{background:transparent; color:var(--ink); box-shadow:2px 2px 0 var(--line)}
+  button:disabled{opacity:.35; cursor:not-allowed; box-shadow:none}
+  button:focus-visible{outline:2.5px solid var(--ochre); outline-offset:2px}
 
-  /* ---- level meter: is the mic even alive ---- */
-  .level{flex:1; min-width:120px; height:5px; background:var(--rule); border-radius:3px; overflow:hidden}
-  .level i{display:block; height:100%; width:0%; background:var(--sage); transition:width .08s}
+  .level{flex:1; min-width:120px; height:7px; background:var(--line2); border-radius:4px; overflow:hidden; border:1px solid var(--line)}
+  .level i{display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--sage),var(--pine)); transition:width .08s}
 
-  /* ---- verdict ---- */
+  /* ---- verdict: the headline reading, big and confident ---- */
   .verdict{
-    border:1px solid var(--rule); border-left:3px solid var(--rule);
-    padding:13px 15px; border-radius:3px; margin-bottom:14px;
+    border:1px solid var(--line); border-radius:9px; background:var(--panel);
+    padding:16px 18px; margin-bottom:14px; position:relative; overflow:hidden; box-shadow:var(--shadow);
   }
-  .verdict.hot{border-left-color:var(--brick); background:#fdf4f1}
-  .verdict.warm{border-left-color:var(--ochre); background:#fdf8ef}
-  .verdict.cool{border-left-color:var(--sage)}
-  .verdict b{color:var(--ink); font-size:19px; font-weight:700; display:block}
-  .verdict span{font-size:12.5px; color:var(--mute)}
+  .verdict::before{content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--line)}
+  .verdict.hot::before{background:var(--brick)} .verdict.hot{background:#faeee6}
+  .verdict.warm::before{background:var(--ochre)} .verdict.warm{background:#faf1df}
+  .verdict.cool::before{background:var(--sage)}
+  .verdict b{font-family:"Fraunces",serif; color:var(--ink); font-size:26px; font-weight:600; display:block; letter-spacing:-.4px; line-height:1.1}
+  .verdict span{font-size:12.5px; color:var(--mute); font-family:"IBM Plex Mono",monospace}
 
-  /* ---- bars ---- */
-  .bar{display:grid; grid-template-columns:120px 1fr 52px; gap:11px; align-items:center; margin-bottom:8px}
-  .bar .n{font-size:13px; color:var(--body)}
-  .bar .t{height:9px; background:var(--rule); border-radius:2px; overflow:hidden}
+  /* ---- probability bars ---- */
+  .bar{display:grid; grid-template-columns:118px 1fr 46px; gap:12px; align-items:center; margin-bottom:9px}
+  .bar .n{font-size:13.5px; color:var(--body)}
+  .bar .t{height:10px; background:var(--line2); border-radius:5px; overflow:hidden; border:1px solid var(--line)}
   .bar .t i{display:block; height:100%; width:0%; transition:width .12s}
-  .bar .v{font-size:12px; text-align:right; color:var(--mute); font-variant-numeric:tabular-nums}
+  .bar .v{font-family:"IBM Plex Mono",monospace; font-size:12px; text-align:right; color:var(--mute)}
 
-  input[type=range]{flex:1; min-width:130px; accent-color:var(--pine)}
-  .hint{font-size:12px; color:var(--mute); margin-top:7px}
+  input[type=range]{flex:1; min-width:130px; accent-color:var(--pine); height:22px}
+  .hint{font-size:12.5px; color:var(--mute); margin-top:9px; line-height:1.5}
   .hint b{color:var(--body); font-weight:600}
+  .mono{font-family:"IBM Plex Mono",monospace}
 
-  table{width:100%; border-collapse:collapse; font-size:13px}
-  th{text-align:left; font-size:10px; letter-spacing:1.5px; color:var(--mute); font-weight:700; padding:0 0 6px; border-bottom:1px solid var(--rule)}
-  td{padding:7px 0; border-bottom:1px solid #efe9db; font-variant-numeric:tabular-nums}
-  .empty{color:var(--mute); font-size:13px; padding:14px 0}
+  table{width:100%; border-collapse:collapse; font-size:13.5px}
+  th{text-align:left; font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:1px; text-transform:uppercase; color:var(--mute); font-weight:600; padding:0 0 8px; border-bottom:1.5px solid var(--line)}
+  td{padding:9px 0; border-bottom:1px solid var(--line2)}
+  td.mono, .bar .v, .stat b{font-variant-numeric:tabular-nums}
+  .empty{color:var(--mute); font-size:13px; padding:16px 0; font-style:italic}
 
-  .note{background:var(--wash); border:1px solid var(--rule); border-radius:3px; padding:12px 14px; font-size:12.5px}
-  .err{border-color:var(--brick); background:#fdf4f1; color:var(--brick)}
-  .drop{border:1px dashed var(--rule); border-radius:3px; padding:16px; text-align:center; font-size:13px; color:var(--mute)}
-  .drop input{margin-top:8px; font-size:12px}
-
-  /* ---- phase 2 ---- */
-  #map{height:290px; border:1px solid var(--rule); border-radius:3px; background:var(--wash)}
-  .pill{
-    display:inline-block; font-size:11px; letter-spacing:1px; font-weight:700;
-    padding:3px 9px; border-radius:11px; border:1px solid var(--rule); color:var(--mute);
+  .note{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:13px 15px; font-size:12.5px; box-shadow:var(--shadow)}
+  .err{border-color:var(--brick); background:#faeee6; color:var(--brick)}
+  .drop{
+    border:1.5px dashed var(--line); border-radius:9px; padding:20px; text-align:center;
+    font-size:13px; color:var(--mute); background:repeating-linear-gradient(-45deg,transparent,transparent 9px,rgba(207,196,168,.09) 9px,rgba(207,196,168,.09) 18px);
   }
+  .drop input{margin-top:10px; font-size:12px}
+  .drop b{color:var(--body)}
+
+  #map{height:300px; border:1px solid var(--line); border-radius:9px; background:var(--panel); box-shadow:var(--shadow)}
+  .leaflet-container{font-family:"IBM Plex Mono",monospace; background:#e9e2cf}
+
+  /* ---- status pills: like rubber stamps ---- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px; letter-spacing:.5px; text-transform:uppercase; font-weight:500;
+    padding:4px 10px; border-radius:20px; border:1.5px solid var(--line); color:var(--mute); background:var(--panel);
+  }
+  .pill::before{content:""; width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.6}
   .pill.on{border-color:var(--pine); color:var(--pine)}
   .pill.off{border-color:var(--brick); color:var(--brick)}
-  .tiny{font:inherit; font-size:12px; font-weight:600; padding:7px 13px; background:transparent; color:var(--ink); border:1px solid var(--rule)}
+  .tiny{
+    font-family:"Inter",sans-serif; font-size:12.5px; font-weight:600; padding:8px 14px;
+    background:var(--panel); color:var(--ink); border:1.5px solid var(--line); border-radius:7px;
+    box-shadow:1.5px 1.5px 0 var(--line2);
+  }
+  .tiny:active{transform:translate(1.5px,1.5px); box-shadow:none}
   .tiny:hover{border-color:var(--ink)}
-  .stat{display:flex; gap:26px; margin:12px 0 4px}
-  .stat div{font-size:11px; letter-spacing:1.5px; color:var(--mute)}
-  .stat b{display:block; font-size:22px; color:var(--ink); font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:0}
 
-  /* ---- risk cards ---- */
-  .rcard{border:1px solid var(--rule); border-left:4px solid var(--rule); border-radius:3px; padding:13px 15px; margin-bottom:11px}
-  .rcard.high{border-left-color:var(--brick); background:#fdf4f1}
-  .rcard.med{border-left-color:var(--ochre); background:#fdf8ef}
-  .rcard.low{border-left-color:var(--sage)}
+  /* ---- stat ticker ---- */
+  .stat{display:flex; gap:0; margin:15px 0 4px; border:1px solid var(--line); border-radius:9px; overflow:hidden; box-shadow:var(--shadow)}
+  .stat div{flex:1; padding:12px 14px; background:var(--panel); border-right:1px solid var(--line2); font-family:"IBM Plex Mono",monospace; font-size:9.5px; letter-spacing:1px; text-transform:uppercase; color:var(--mute)}
+  .stat div:last-child{border-right:0}
+  .stat b{display:block; font-family:"Fraunces",serif; font-size:28px; color:var(--ink); font-weight:600; letter-spacing:-.5px; margin-top:2px}
+
+  /* ---- risk cards: the payoff, most visual weight ---- */
+  .rcard{border:1px solid var(--line); border-radius:10px; padding:15px 17px; margin-bottom:12px; background:var(--panel); position:relative; overflow:hidden; box-shadow:var(--shadow)}
+  .rcard::before{content:""; position:absolute; left:0; top:0; bottom:0; width:6px; background:var(--line)}
+  .rcard.high::before{background:var(--brick)} .rcard.high{background:#faeee6}
+  .rcard.med::before{background:var(--ochre)} .rcard.med{background:#faf1df}
+  .rcard.low::before{background:var(--sage)}
   .rcard .top{display:flex; justify-content:space-between; align-items:baseline; gap:10px}
-  .rcard .ward{font-size:16px; font-weight:700; color:var(--ink)}
-  .rcard .score{font-size:22px; font-weight:700; font-variant-numeric:tabular-nums}
+  .rcard .ward{font-family:"Fraunces",serif; font-size:19px; font-weight:600; color:var(--ink); letter-spacing:-.3px}
+  .rcard .score{font-family:"Fraunces",serif; font-size:30px; font-weight:900; letter-spacing:-1px; line-height:1}
+  .rcard .score small{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--mute); font-weight:400}
   .rcard .score.high{color:var(--brick)} .rcard .score.med{color:var(--ochre)} .rcard .score.low{color:var(--sage)}
-  .rcard .why{font-size:12px; color:var(--mute); margin:5px 0 9px}
-  .rcard .task{font-size:13px; color:var(--body); padding:8px 11px; background:rgba(255,255,255,.6); border:1px solid var(--rule); border-radius:3px}
-  .rcard .task b{color:var(--ink); font-weight:700}
+  .rcard .why{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--mute); margin:6px 0 11px; letter-spacing:.2px}
+  .rcard .task{font-size:13.5px; color:var(--body); padding:10px 13px; background:rgba(255,255,255,.5); border:1px solid var(--line); border-radius:7px}
+  .rcard .task b{color:var(--ink); font-weight:600}
+
+  footer{text-align:center; padding:34px 22px 0; font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--mute); letter-spacing:.3px}
+  footer .m{color:var(--pine)}
+
+  @media (max-width:520px){
+    h1{font-size:38px} .stamp{display:none}
+    .stat b{font-size:23px} .bar{grid-template-columns:96px 1fr 42px}
+  }
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
+<div class="wrap">
 
-<div class="eyebrow">PHASE 1 &middot; LISTENER</div>
-<h1>BuzzGuard</h1>
-<div class="sub">Point the mic at a buzz. The model names the species on-device.</div>
-<hr>
+<header>
+  <div class="kicker">Acoustic vector surveillance</div>
+  <h1>Buzz<span class="g">Guard</span></h1>
+  <div class="tagline">Field instrument for hearing an outbreak before it bites.</div>
+  <div class="stamp">
+    ON&#8209;DEVICE &middot; <b>OFFLINE</b><br>
+    no audio leaves<br>
+    this phone
+  </div>
+</header>
 
 <!-- 1. model -->
-<div class="lbl">MODEL</div>
-<div id="loadbox" class="drop">
-  Pick <b>model.json</b>, the <b>.bin</b> shard, and <b>model_meta.json</b> from your Phase 0 export
-  <input type="file" id="files" multiple accept=".json,.bin">
-</div>
-<div id="mstat" class="note" style="margin-top:10px">No model loaded.</div>
-
-<hr>
+<section>
+  <div class="sh"><span class="no">01</span><h2>The model</h2><span class="aside">~0.3 MB &middot; on&#8209;device</span></div>
+  <div id="loadbox" class="drop">
+    Pick <b>model.json</b>, the <b>.bin</b> shard, and <b>model_meta.json</b> from your Phase 0 export
+    <input type="file" id="files" multiple accept=".json,.bin">
+  </div>
+  <div id="mstat" class="note" style="margin-top:11px">No model loaded.</div>
+</section>
 
 <!-- 1b. bench test -->
-<div class="lbl">BENCH TEST &mdash; SKIP THE MICROPHONE</div>
-<div id="benchbox" class="drop">
-  Drop in a <b>.wav</b> and classify it directly. No speakers, no room, no mic.
-  <input type="file" id="wav" accept="audio/*" disabled>
-</div>
-<div id="bstat" class="hint">Load a model first. Then feed it a clip from your Wingbeats test set.</div>
-<div id="bres"></div>
-
-<hr>
+<section>
+  <div class="sh"><span class="no">02</span><h2>Bench test</h2><span class="aside">skip the microphone</span></div>
+  <div id="benchbox" class="drop">
+    Drop in a <b>.wav</b> and classify it directly. No speakers, no room, no mic.
+    <input type="file" id="wav" accept="audio/*" disabled>
+  </div>
+  <div id="bstat" class="hint">Load a model first. Then feed it a clip from your Wingbeats test set.</div>
+  <div id="bres"></div>
+</section>
 
 <!-- 2. scope -->
-<div class="lbl">WHAT THE MODEL HEARS</div>
-<div class="scope">
-  <canvas id="spec"></canvas>
-  <div class="band">0&ndash;2000 Hz</div>
-  <div class="axis" id="ax1">1000</div>
-  <div class="axis" id="ax2">300</div>
-</div>
-<div class="hint">Mosquitoes live between the two guide lines. Flat and empty means the mic is not picking anything up.</div>
+<section>
+  <div class="sh"><span class="no">03</span><h2>What the model hears</h2><span class="aside">live spectrogram</span></div>
+  <div class="scope">
+    <canvas id="spec"></canvas>
+    <div class="band">0&ndash;2000 Hz</div>
+    <div class="axis" id="ax1">1000</div>
+    <div class="axis" id="ax2">300</div>
+  </div>
+  <div class="hint">Mosquitoes live between the two guide lines. Flat and empty means the mic is not picking anything up.</div>
 
-<div class="row" style="margin-top:14px">
-  <button id="go" disabled>Start listening</button>
-  <div class="level"><i id="lvl"></i></div>
-</div>
-<div id="astat" class="hint">Microphone off.</div>
-
-<hr>
+  <div class="row" style="margin-top:15px">
+    <button id="go" disabled>Start listening</button>
+    <div class="level"><i id="lvl"></i></div>
+  </div>
+  <div id="astat" class="hint">Microphone off.</div>
+</section>
 
 <!-- 3. verdict -->
-<div class="lbl">READING</div>
-<div id="verdict" class="verdict">
-  <b id="vname">&mdash;</b>
-  <span id="vsub">Waiting for audio</span>
-</div>
-<div id="bars"></div>
+<section>
+  <div class="sh"><span class="no">04</span><h2>The reading</h2></div>
+  <div id="verdict" class="verdict">
+    <b id="vname">&mdash;</b>
+    <span id="vsub">Waiting for audio</span>
+  </div>
+  <div id="bars"></div>
 
-<div class="row" style="margin-top:16px">
-  <span style="font-size:12.5px">Confidence gate</span>
-  <input type="range" id="thr" min="0" max="0.95" step="0.05" value="0.6">
-  <span id="thrv" style="font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--ink); font-weight:600">0.60</span>
-</div>
-<div class="hint">
-  Your Phase 0 sweep: <b>0.60</b> keeps 74.8% of clips at 83.0% accuracy. Raising it to 0.90 buys 93.7%
-  but throws away 61% of what you hear.
-</div>
-
-<hr>
+  <div class="row" style="margin-top:18px">
+    <span class="mono" style="font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--mute)">Confidence gate</span>
+    <input type="range" id="thr" min="0" max="0.95" step="0.05" value="0.6">
+    <span id="thrv" class="mono" style="font-size:13px; color:var(--pine); font-weight:600">0.60</span>
+  </div>
+  <div class="hint">
+    Your Phase 0 sweep: <b>0.60</b> keeps 74.8% of clips at 83.0% accuracy. Raising it to 0.90 buys 93.7%
+    but throws away 61% of what you hear.
+  </div>
+</section>
 
 <!-- 4. where -->
-<div class="lbl">WHERE</div>
-<div class="row" style="margin-bottom:11px">
-  <span id="geopill" class="pill">LOCATION OFF</span>
-  <span id="netpill" class="pill">NET</span>
-  <span id="dbpill" class="pill">STORAGE</span>
-  <button id="geo" class="tiny">Use my location</button>
-</div>
-<div id="map"></div>
-<div class="hint">
-  Every confident detection is stamped with a location and time and written to this device.
-  Nothing is uploaded. Turn off the network and it keeps working.
-</div>
+<section>
+  <div class="sh"><span class="no">05</span><h2>Where it is active</h2></div>
+  <div class="row" style="margin-bottom:13px">
+    <span id="geopill" class="pill">Location off</span>
+    <span id="netpill" class="pill">Net</span>
+    <span id="dbpill" class="pill">Storage</span>
+    <button id="geo" class="tiny">Use my location</button>
+  </div>
+  <div id="map"></div>
+  <div class="hint">
+    Every confident detection is stamped with a location and time and written to this device.
+    Nothing is uploaded. Turn off the network and it keeps working.
+  </div>
 
-<div class="stat">
-  <div>TOTAL<b id="s1">0</b></div>
-  <div>AEDES<b id="s2">0</b></div>
-  <div>LAST 24H<b id="s3">0</b></div>
-</div>
-
-<hr>
+  <div class="stat">
+    <div>Total<b id="s1">0</b></div>
+    <div>Aedes<b id="s2">0</b></div>
+    <div>Last 24h<b id="s3">0</b></div>
+  </div>
+</section>
 
 <!-- 5. risk -->
-<div class="lbl">WARD RISK &mdash; DETECTIONS + WATER REPORTS + RAIN</div>
-<div class="row" style="margin-bottom:12px; gap:10px">
-  <button id="report" class="tiny">Report stagnant water here</button>
-  <span class="pill" id="rainpill">RAIN: not set</span>
-  <input type="range" id="rain" min="0" max="100" step="5" value="20" style="max-width:150px">
-</div>
-<div class="hint" style="margin-top:-4px; margin-bottom:12px">
-  Rain slider stands in for a weather feed (mm, last 7 days). Wire it to a real API later; for a demo,
-  set it by hand. Breeding needs standing water, so rain multiplies the risk from reported sites.
-</div>
-<div id="riskcards"></div>
-<div id="risknote" class="hint">
-  No wards scored yet. Log a detection or report a water site, and a ward appears here with a task for a health worker.
-</div>
-
-<hr>
+<section>
+  <div class="sh"><span class="no">06</span><h2>Ward risk</h2><span class="aside">detections &times; water &times; rain</span></div>
+  <div class="row" style="margin-bottom:12px; gap:10px">
+    <button id="report" class="tiny">Report stagnant water here</button>
+    <span class="pill" id="rainpill">Rain: not set</span>
+    <input type="range" id="rain" min="0" max="100" step="5" value="20" style="max-width:150px">
+  </div>
+  <div class="hint" style="margin-top:-2px; margin-bottom:14px">
+    Rain slider stands in for a weather feed (mm, last 7 days). Wire it to a real API later; for a demo,
+    set it by hand. Breeding needs standing water, so rain multiplies the risk from reported sites.
+  </div>
+  <div id="riskcards"></div>
+  <div id="risknote" class="hint">
+    No wards scored yet. Log a detection or report a water site, and a ward appears here with a task for a health worker.
+  </div>
+</section>
 
 <!-- 6. log -->
-<div class="lbl">DETECTION LOG</div>
-<table>
-  <thead><tr><th>TIME</th><th>SPECIES</th><th>LOCATION</th><th style="text-align:right">CONF</th></tr></thead>
-  <tbody id="log"></tbody>
-</table>
-<div id="logempty" class="empty">Nothing logged yet. Confident detections are saved here and survive a reload.</div>
-<div class="row" style="margin-top:13px">
-  <button id="csv" class="tiny">Export CSV</button>
-  <button id="json" class="tiny">Export JSON</button>
-  <button id="wipe" class="tiny">Clear all</button>
+<section>
+  <div class="sh"><span class="no">07</span><h2>Detection log</h2></div>
+  <table>
+    <thead><tr><th>Time</th><th>Species</th><th>Location</th><th style="text-align:right">Conf</th></tr></thead>
+    <tbody id="log"></tbody>
+  </table>
+  <div id="logempty" class="empty">Nothing logged yet. Confident detections are saved here and survive a reload.</div>
+  <div class="row" style="margin-top:14px">
+    <button id="csv" class="tiny">Export CSV</button>
+    <button id="json" class="tiny">Export JSON</button>
+    <button id="wipe" class="tiny">Clear all</button>
+  </div>
+</section>
+
 </div>
+<footer>Built by <span class="m">Anjali Desai</span> &middot; runs offline on any phone</footer>
 
 <script>
 const CLIP = 5000, SR = 8000, HOP_MS = 250, SMOOTH = 8;
