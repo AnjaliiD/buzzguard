@@ -1,0 +1,14 @@
+{
+  "classes": [
+    "aedes",
+    "other_mosquito",
+    "background"
+  ],
+  "sr": 8000,
+  "clip": 5000,
+  "n_fft": 256,
+  "hop": 64,
+  "n_mels": 64,
+  "fmin": 50.0,
+  "fmax": 4000.0
+}
