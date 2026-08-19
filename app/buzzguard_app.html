@@ -265,12 +265,12 @@
 
   <div class="row" style="margin-top:18px">
     <span class="mono" style="font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--mute)">Confidence gate</span>
-    <input type="range" id="thr" min="0" max="0.95" step="0.05" value="0.6">
-    <span id="thrv" class="mono" style="font-size:13px; color:var(--pine); font-weight:600">0.60</span>
+    <input type="range" id="thr" min="0" max="0.95" step="0.05" value="0.4">
+    <span id="thrv" class="mono" style="font-size:13px; color:var(--pine); font-weight:600">0.40</span>
   </div>
   <div class="hint">
-    Your Phase 0 sweep: <b>0.60</b> keeps 74.8% of clips at 83.0% accuracy. Raising it to 0.90 buys 93.7%
-    but throws away 61% of what you hear.
+    Lower gate = more sensitive. In clean lab audio 0.60 is the sweet spot; through a mic in a noisy room a
+    real wingbeat may only reach 0.40, so drop the gate to catch it. If it fires on silence, it is too low.
   </div>
 </section>
 
@@ -333,7 +333,7 @@
 <footer>Built by <span class="m">Anjali Desai</span> &middot; runs offline on any phone</footer>
 
 <script>
-const CLIP = 5000, SR = 8000, HOP_MS = 250, SMOOTH = 8;
+const CLIP = 5000, SR = 8000, HOP_MS = 250, SMOOTH = 12;
 let CLASSES = ["aedes","other_mosquito","background"];
 const PRETTY = {aedes:"Aedes", other_mosquito:"Other mosquito", background:"No mosquito"};
 const COLOR  = {aedes:"var(--brick)", other_mosquito:"var(--ochre)", background:"var(--sage)"};
