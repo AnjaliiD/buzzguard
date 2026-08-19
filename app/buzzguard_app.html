@@ -477,7 +477,7 @@ async function start(){
 
   const src = ctx.createMediaStreamSource(stream);
   analyser = ctx.createAnalyser();
-  analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.55;
+  analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.5;
   src.connect(analyser);
 
   const code = `class C extends AudioWorkletProcessor{
@@ -859,50 +859,60 @@ addEventListener("online", net); addEventListener("offline", net);
 
 /* ---------------- spectrogram ---------------- */
 const cv = $("spec"), c2 = cv.getContext("2d");
-let SHOWN = 128;   // 0..2000 Hz of the 256 bins that cover 0..4000 Hz
+const TOPHZ = 2000;             // show 0..2000 Hz
+// offscreen buffer we scroll, so device-pixel-ratio never smears the image
+const buf = document.createElement("canvas");
+const bctx = buf.getContext("2d");
 
 function fit(){
-  const r = window.devicePixelRatio||1;
-  cv.width = cv.clientWidth*r; cv.height = cv.clientHeight*r;
-  c2.setTransform(r,0,0,r,0,0);
-  c2.fillStyle = "#f7f5f0"; c2.fillRect(0,0,cv.clientWidth,cv.clientHeight);
-  const h = cv.clientHeight;
-  $("ax1").style.top = (h - (1000/2000)*h - 7) + "px";
-  $("ax2").style.top = (h - (300/2000)*h - 7) + "px";
+  const w = Math.max(240, cv.clientWidth|0), h = cv.clientHeight|0;
+  cv.width = w; cv.height = h;             // draw in CSS pixels; crisp enough, and dpr-safe
+  buf.width = w; buf.height = h;
+  bctx.fillStyle = "#1f2e26"; bctx.fillRect(0,0,w,h);
+  c2.fillStyle = "#1f2e26"; c2.fillRect(0,0,w,h);
+  $("ax1").style.top = (h - (1000/TOPHZ)*h - 7) + "px";
+  $("ax2").style.top = (h - (300/TOPHZ)*h - 7) + "px";
 }
 addEventListener("resize", fit); fit();
 
 function shade(v){
-  // quiet paper -> sage -> pine -> brick at the peaks
-  if(v < .28) return `rgba(120,150,130,${v*1.5})`;
-  if(v < .62) return `rgb(${111-(v-.28)*90|0},${158-(v-.28)*60|0},${125-(v-.28)*40|0})`;
-  return `rgb(${44+(v-.62)*300|0},${107-(v-.62)*90|0},${84-(v-.62)*90|0})`;
+  // dark screen -> sage -> pine -> hot ochre/brick at the peaks
+  if(v < .30) return `rgba(90,150,110,${(v/0.30)*0.55})`;
+  if(v < .65) return `rgb(${70+(v-.30)*120|0},${170-(v-.30)*40|0},${110}) `;
+  return `rgb(${200+(v-.65)*140|0},${150-(v-.65)*260|0},${60})`;
 }
 
 function paint(){
-  if(!running){ return; }
-  const w = cv.clientWidth, h = cv.clientHeight;
-  const data = new Uint8Array(analyser.frequencyBinCount);
+  if(!running || !analyser){ return; }
+  const w = cv.width, h = cv.height;
+  const bins = analyser.frequencyBinCount;              // = fftSize/2
+  const data = new Uint8Array(bins);
   analyser.getByteFrequencyData(data);
 
-  // scroll left, newest column on the right
-  c2.drawImage(cv, -1*(window.devicePixelRatio||1), 0);
-  c2.fillStyle = "#f7f5f0"; c2.fillRect(w-2, 0, 2, h);
+  // how many bins fall inside 0..TOPHZ, given the real sample rate
+  const nyquist = (ctx ? ctx.sampleRate : 8000) / 2;    // Hz at the top bin
+  const maxBin = Math.max(1, Math.min(bins, Math.round((TOPHZ / nyquist) * bins)));
 
-  const n = Math.min(SHOWN, data.length);
-  for(let i=0;i<n;i++){
+  // scroll the buffer left by one column, then draw the new column at the right
+  bctx.drawImage(buf, -2, 0);
+  bctx.fillStyle = "#1f2e26"; bctx.fillRect(w-2, 0, 2, h);
+
+  for(let i=0;i<maxBin;i++){
     const v = data[i]/255;
-    if(v > .04){
-      c2.fillStyle = shade(v);
-      const y = h - (i/n)*h;
-      c2.fillRect(w-2, y-(h/n)-.5, 2, (h/n)+1);
+    if(v > .05){
+      bctx.fillStyle = shade(v);
+      const y0 = h - ((i+1)/maxBin)*h;
+      const y1 = h - (i/maxBin)*h;
+      bctx.fillRect(w-2, y0, 2, (y1-y0)+1);
     }
   }
-  // guide lines at the mosquito band
-  c2.strokeStyle = "rgba(138,133,118,.5)"; c2.lineWidth = 1; c2.setLineDash([3,3]);
+
+  // blit buffer to the visible canvas, then overlay guide lines
+  c2.drawImage(buf, 0, 0);
+  c2.strokeStyle = "rgba(205,191,160,.45)"; c2.lineWidth = 1; c2.setLineDash([4,4]);
   [300,1000].forEach(f=>{
-    const y = h - (f/2000)*h;
-    c2.beginPath(); c2.moveTo(w-2,y); c2.lineTo(w,y); c2.stroke();
+    const y = h - (f/TOPHZ)*h;
+    c2.beginPath(); c2.moveTo(0,y); c2.lineTo(w,y); c2.stroke();
   });
   c2.setLineDash([]);
   raf = requestAnimationFrame(paint);
