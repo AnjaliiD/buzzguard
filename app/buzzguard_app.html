@@ -227,12 +227,13 @@
 
 <!-- 1b. bench test -->
 <section>
-  <div class="sh"><span class="no">02</span><h2>Bench test</h2><span class="aside">skip the microphone</span></div>
+  <div class="sh"><span class="no">02</span><h2>Add an audio sample</h2><span class="aside">upload a recording</span></div>
   <div id="benchbox" class="drop">
-    Drop in a <b>.wav</b> and classify it directly. No speakers, no room, no mic.
+    Drop in a <b>.wav</b> recording of a mosquito. It runs through the same model as the live mic,
+    and a confident detection is added to the map and ward risk below.
     <input type="file" id="wav" accept="audio/*" disabled>
   </div>
-  <div id="bstat" class="hint">Load a model first. Then feed it a clip from your Wingbeats test set.</div>
+  <div id="bstat" class="hint">Load a model first, then upload a clip.</div>
   <div id="bres"></div>
 </section>
 
@@ -370,7 +371,7 @@ $("files").addEventListener("change", async e => {
     say($("mstat"), `Ready. ${CLASSES.length} classes, ${kb} KB of weights.`);
     $("go").disabled = false;
     $("wav").disabled = false;
-    $("bstat").innerHTML = "Feed it a clip from your Wingbeats test set. If it gets that right, the model is fine and any live miss is the room, not the maths.";
+    $("bstat").innerHTML = "Ready. Upload a mosquito recording and a confident detection lands on the map.";
     drawBars(new Float32Array(CLASSES.length));
 
     // keep it on the device so the next visit needs no files and no network
@@ -434,14 +435,28 @@ $("wav").addEventListener("change", async e => {
     }
     const avg = Array.from(sums, v => v/wins.length);
     let best=0; for(let i=1;i<avg.length;i++) if(avg[i]>avg[best]) best=i;
+    const cls = CLASSES[best], conf = avg[best], thr = parseFloat($("thr").value);
 
-    $("bstat").textContent =
-      `${f.name} · ${(y.length/SR).toFixed(2)} s · ${wins.length} windows analysed`;
+    // Feed a confident mosquito result into the real pipeline: it logs,
+    // geotags (if location is on), drops a map pin, and updates ward risk,
+    // exactly as a live microphone detection would.
+    let added = "";
+    if(cls !== "background" && conf >= thr){
+      await log(cls, conf);
+      added = here
+        ? ` &nbsp;<b style="color:var(--pine)">Added to the map and ward risk.</b>`
+        : ` &nbsp;<b style="color:var(--ochre)">Turn on location to place it on the map.</b>`;
+    } else if(cls !== "background"){
+      added = ` &nbsp;<span style="color:var(--mute)">Below the ${thr.toFixed(2)} gate, not logged.</span>`;
+    }
+
+    $("bstat").innerHTML =
+      `${f.name} · ${(y.length/SR).toFixed(2)} s · ${wins.length} window${wins.length!==1?"s":""} analysed`;
     $("bres").innerHTML =
-      `<div class="verdict ${CLASSES[best]==="aedes"?"hot":CLASSES[best]==="background"?"cool":"warm"}"
+      `<div class="verdict ${cls==="aedes"?"hot":cls==="background"?"cool":"warm"}"
             style="margin-top:12px">
-         <b>${PRETTY[CLASSES[best]]||CLASSES[best]}</b>
-         <span>${(avg[best]*100).toFixed(1)}% mean confidence across the clip</span>
+         <b>${PRETTY[cls]||cls}</b>
+         <span>${(conf*100).toFixed(1)}% mean confidence across the clip.${added}</span>
        </div>
        <table style="margin-top:10px">
          <thead><tr><th>CLASS</th><th style="text-align:right">MEAN</th><th style="text-align:right">WINDOWS WON</th></tr></thead>
@@ -451,10 +466,11 @@ $("wav").addEventListener("change", async e => {
                 <td style="text-align:right">${votes[i]} / ${wins.length}</td></tr>`).join("")}
          </tbody>
        </table>
-       <div class="hint">No gate applied here. These are the raw numbers the model produces.</div>`;
+       <div class="hint">Confident mosquito detections are added to the log, map, and ward risk below.</div>`;
   }catch(err){
     $("bstat").textContent = "Could not read that file: " + err.message;
   }
+  e.target.value = "";   // allow re-uploading the same file to add another detection
 });
 
 /* ---------------- audio ---------------- */
