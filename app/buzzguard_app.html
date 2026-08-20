@@ -476,9 +476,23 @@ async function start(){
   srcRate = ctx.sampleRate;
 
   const src = ctx.createMediaStreamSource(stream);
+
+  // Band-pass to the mosquito band (~250-1200 Hz). Strips room rumble and the
+  // hiss above the wingbeat, so the model and the display both see a clean tone
+  // instead of broadband noise. This is standard acoustic pre-processing, not a fudge.
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass"; hp.frequency.value = 250; hp.Q.value = 0.7;
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";  lp.frequency.value = 1200; lp.Q.value = 0.7;
+  // a gentle peak right where Aedes sits, to lift the signal a little
+  const pk = ctx.createBiquadFilter();
+  pk.type = "peaking"; pk.frequency.value = 600; pk.Q.value = 1.0; pk.gain.value = 6;
+  src.connect(hp); hp.connect(lp); lp.connect(pk);
+  const feed = pk;   // everything downstream taps the filtered signal
+
   analyser = ctx.createAnalyser();
   analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.5;
-  src.connect(analyser);
+  feed.connect(analyser);
 
   const code = `class C extends AudioWorkletProcessor{
     process(i){ const c=i[0][0]; if(c) this.port.postMessage(c.slice(0)); return true; }
@@ -487,7 +501,7 @@ async function start(){
   await ctx.audioWorklet.addModule(url);
   node = new AudioWorkletNode(ctx, "cap");
   node.port.onmessage = e => push(e.data);
-  src.connect(node);
+  feed.connect(node);
 
   running = true;
   $("go").textContent = "Stop listening";
