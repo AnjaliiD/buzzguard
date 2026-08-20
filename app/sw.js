@@ -2,7 +2,7 @@
    Caches the app shell and any map tiles you have already looked at, so the
    whole thing keeps working with the network switched off. */
 
-const CACHE = "buzzguard-v1";
+const CACHE = "buzzguard-v2";
 
 const SHELL = [
   "./",
