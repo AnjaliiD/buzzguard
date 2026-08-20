@@ -437,36 +437,29 @@ $("wav").addEventListener("change", async e => {
     let best=0; for(let i=1;i<avg.length;i++) if(avg[i]>avg[best]) best=i;
     const cls = CLASSES[best], conf = avg[best], thr = parseFloat($("thr").value);
 
-    // Feed a confident mosquito result into the real pipeline: it logs,
-    // geotags (if location is on), drops a map pin, and updates ward risk,
-    // exactly as a live microphone detection would.
-    let added = "";
-    if(cls !== "background" && conf >= thr){
-      await log(cls, conf);
-      added = here
-        ? ` &nbsp;<b style="color:var(--pine)">Added to the map and ward risk.</b>`
-        : ` &nbsp;<b style="color:var(--ochre)">Turn on location to place it on the map.</b>`;
-    } else if(cls !== "background"){
-      added = ` &nbsp;<span style="color:var(--mute)">Below the ${thr.toFixed(2)} gate, not logged.</span>`;
-    }
+    // show the result in THE READING (section 04), the same place the live mic uses
+    const avgF = Float32Array.from(avg);
+    drawBars(avgF);
+    verdict(avgF, true);    // force=true: an explicit upload always logs (bypasses mic anti-spam)
+    try{ $("verdict").scrollIntoView({behavior:"smooth", block:"center"}); }catch(_){}
 
+    const placed = (cls !== "background" && conf >= thr)
+      ? (here ? `<b style="color:var(--pine)">Added to the map and ward risk.</b>`
+              : `<b style="color:var(--ochre)">Turn on location to place it on the map.</b>`)
+      : (cls !== "background" ? `<span style="color:var(--mute)">Below the ${thr.toFixed(2)} gate, not logged.</span>` : "");
+
+    // section 02 keeps only a compact per-window breakdown as supporting detail
     $("bstat").innerHTML =
-      `${f.name} · ${(y.length/SR).toFixed(2)} s · ${wins.length} window${wins.length!==1?"s":""} analysed`;
+      `${f.name} · ${(y.length/SR).toFixed(2)} s · ${wins.length} window${wins.length!==1?"s":""}. See <b>The reading</b> below. ${placed}`;
     $("bres").innerHTML =
-      `<div class="verdict ${cls==="aedes"?"hot":cls==="background"?"cool":"warm"}"
-            style="margin-top:12px">
-         <b>${PRETTY[cls]||cls}</b>
-         <span>${(conf*100).toFixed(1)}% mean confidence across the clip.${added}</span>
-       </div>
-       <table style="margin-top:10px">
+      `<table style="margin-top:10px">
          <thead><tr><th>CLASS</th><th style="text-align:right">MEAN</th><th style="text-align:right">WINDOWS WON</th></tr></thead>
          <tbody>${CLASSES.map((c,i)=>
            `<tr><td>${PRETTY[c]||c}</td>
                 <td style="text-align:right">${(avg[i]*100).toFixed(1)}%</td>
                 <td style="text-align:right">${votes[i]} / ${wins.length}</td></tr>`).join("")}
          </tbody>
-       </table>
-       <div class="hint">Confident mosquito detections are added to the log, map, and ward risk below.</div>`;
+       </table>`;
   }catch(err){
     $("bstat").textContent = "Could not read that file: " + err.message;
   }
@@ -612,7 +605,7 @@ function drawBars(p){
   });
 }
 
-function verdict(p){
+function verdict(p, force){
   let k=0; for(let i=1;i<p.length;i++) if(p[i]>p[k]) k=i;
   const cls = CLASSES[k], conf = p[k], thr = parseFloat($("thr").value);
   const v = $("verdict");
@@ -631,7 +624,7 @@ function verdict(p){
 
   if(cls !== "background"){
     const now = Date.now();
-    if(!lastLog[cls] || now - lastLog[cls] > 3000){ lastLog[cls] = now; log(cls, conf); }
+    if(force || !lastLog[cls] || now - lastLog[cls] > 3000){ lastLog[cls] = now; log(cls, conf); }
   }
 }
 
